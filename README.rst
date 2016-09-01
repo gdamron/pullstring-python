@@ -27,7 +27,7 @@ PullString Web API in order to display the initial content under the
 default Activity for your Project. Note this code assumes that you
 have defined ``MY_API_KEY`` and ``MY_PROJECT_ID``` strings with the
 appropriate IDs. You can find these IDs under the settings for your
-project under your account on <htts://pullstring.ai/>. We've included
+project under your account on <https://pullstring.ai/>. We've included
 the API Key and Project ID for the example **Rock, Paper, Scissors**
 chatbot.
 
