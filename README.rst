@@ -30,7 +30,7 @@ IDs. You can find these IDs under the settings for your project under
 your account on htts://pullstring.ai/. We've included the API Key and
 Project ID for the example **Rock, Paper, Scissors** chatbot.
 
-.. code-block::python
+.. code-block:: python
 
     >>> MY_API_KEY="9fd2a189-3d57-4c02-8a55-5f0159bff2cf"
     >>> MY_PROJECT_ID="e50b56df-95b7-4fa1-9061-83a7a9bea372"
