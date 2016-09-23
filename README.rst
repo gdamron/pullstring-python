@@ -58,8 +58,8 @@ Documentation
 
 The PullString Web API specification can be found at:
 
-   http://docs.pullstring.ai/docs/api
+   http://docs.pullstring.com/docs/api
 
 For more information about the PullString Platform, refer to:
 
-   http://pullstring.ai/
+   http://pullstring.com/

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # A simple text chat client that uses the PullString Web API.
 #
@@ -70,8 +70,7 @@ class TextClient(object):
                 response = self.ps.send_text(user_input)
             else:
                 # if no input text, then check for a timed response
-                delta = self.get_current_time() - self.last_response_time
-                response = self.ps.check_for_timed_responses(delta)
+                response = self.ps.check_for_timed_responses()
 
 if __name__ == "__main__":
     # parse the command line arguments

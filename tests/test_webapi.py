@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Automated tests for the PullString Web API
 #
@@ -64,13 +64,17 @@ class TestClass(unittest.TestCase):
         self.assertEqual(response.entities[0].value, 4)
 
         # let's start playing... keep choosing until we win or lose
-        for choice in ['paper', 'rock', 'scissors']:
+        finished = False
+        choices = ['paper', 'rock', 'scissors', 'paper']
+        for choice in choices:
             response = conv.send_text(choice)
             if self.does_contain(response, "lost") or \
                self.does_contain(response, "won") or \
-               self.does_contain(response, "start over"):
+               self.does_contain(response, "good game"):
+                finished = True
                 break
-            self.assert_contains(response, "rock, paper or scissors?")
+        if not finished:
+            self.fail("Game did not finish after %d iterations" % len(choices))
 
         # set the Name label and confirm that we can get back the new value
         conv.set_entities([pullstring.LabelEntity("NAME", "Jack")])

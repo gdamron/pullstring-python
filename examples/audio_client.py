@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # An audio chat example that uses the PullString Web API.
 #

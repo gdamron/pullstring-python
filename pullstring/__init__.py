@@ -12,7 +12,7 @@
 PullString Python SDK
 
 This package provides a module to access the PullString Web API.
-For more details, see http://pullstring.ai/.
+For more details, see http://pullstring.com/.
 """
 
 # Define the module metadata
@@ -30,13 +30,7 @@ ENTITY_LABEL             = "label"
 ENTITY_COUNTER           = "counter"
 ENTITY_FLAG              = "flag"
 
-# Define the set of audio formats for lines of dialog
-AUDIO_COMPRESSED_LOW     = "low"
-AUDIO_COMPRESSED_MEDIUM  = "medium"
-AUDIO_COMPRESSED_HIGH    = "high"
-AUDIO_UNCOMPRESSED       = "uncompressed"
-
-# Define the audio formats for streaming audio from the user
+# Define the audio formats for sending audio to the server
 FORMAT_RAW_PCM_16K       = "raw_pcm_16k"
 FORMAT_WAV_16K           = "wav_16k"
 
@@ -55,15 +49,7 @@ class Phoneme(object):
     """
     def __init__(self, name="", secs_since_start=0.0):
         self.name = name
-        self.get_seconds_since_start = secs_since_start
-
-class Parameter(object):
-    """
-    Describe a single parameter for an event or behavior.
-    """
-    def __init__(self, name="", value=""):
-        self.name = name
-        self.value = value
+        self.seconds_since_start = secs_since_start
 
 class Entity(object):
     """
@@ -112,26 +98,11 @@ class DialogOutput(Output):
     def __init__(self, output_id=""):
         Output.__init__(self, output_id, OUTPUT_DIALOG)
         self.text = ""
-        self.uri_low = ""
-        self.uri_medium = ""
-        self.uri_high = ""
-        self.uri_16k_wav = ""
+        self.uri = ""
         self.duration = 0.0
         self.phonemes = []
         self.character = ""
         self.user_data = ""
-
-    def get_audio_uri(self, bitrate=AUDIO_COMPRESSED_MEDIUM):
-        if bitrate == AUDIO_COMPRESSED_LOW:
-            return self.uri_low
-        elif bitrate == AUDIO_COMPRESSED_MEDIUM:
-            return self.uri_medium
-        elif bitrate == AUDIO_COMPRESSED_HIGH:
-            return self.uri_high
-        elif bitrate == AUDIO_UNCOMPRESSED:
-            return self.uri_16k_wav
-        else:
-            raise Exception('Unsupported bitrate for get_audio_uri: %s' % bitrate)
 
     def __str__(self):
         str = self.text
@@ -146,14 +117,13 @@ class BehaviorOutput(Output):
     def __init__(self, output_id=""):
         Output.__init__(self, output_id, OUTPUT_BEHAVIOR)
         self.behavior = ""
-        self.parameters = []
+        self.parameters = {}
 
     def __str__(self):
-        str = self.behavior
+        result = self.behavior
         if self.parameters:
-            str += ": "
-            str += ", ".join(["%s=%s" % (x.name, x.value) for x in self.parameters])
-        return str
+            result += ": " + str(self.parameters)
+        return result
 
 class Status(object):
     """
@@ -194,7 +164,6 @@ class Request(object):
         self.conversation_id = ""
         self.language = ""
         self.locale = ""
-        self.account_id = ""
 
 class VersionInfo(object):
     """
@@ -202,7 +171,7 @@ class VersionInfo(object):
     """
 
     # class variable to store the API base URL for all requests
-    __API_BASE_URL = "https://puppeteer.toytalk.com/v3"
+    __API_BASE_URL = "https://conversation.pullstring.ai/v1"
 
     # class variable to store the API base headers for all requests
     __API_BASE_HEADERS = {}
@@ -247,7 +216,7 @@ class Conversation(object):
     The Conversation object lets you interface with PullString's Web API.
 
     To initiate a conversation, you call the start() function, providing
-    the PullString project name and a Request() object that must specify
+    the PullString project ID and a Request() object that must specify
     your API Key. The API Key will be remembered for future requests to
     the same Conversation instance.
 
@@ -256,31 +225,29 @@ class Conversation(object):
     or behaviors.
 
     You can send input to the Web API using the various send_XXX()
-    functions, e.g., use send_text() to send a text input string.
-
-    At that point, you can either use send_text(), to send a text input
-    string, or send_audio(), to send 16-bit LinearPCM audio data.
+    functions, e.g., use send_text() to send a text input string
+    or send_audio() to send 16-bit LinearPCM audio data.
     """
     
     def __init__(self):
         self.__last_request = None
         self.__last_response = None
 
-    def start(self, project_name, request=None):
+    def start(self, project_id, request=None):
         """
         Start a new conversation with the Web API and return the response.
 
-        You must specify the PullString project name and a Request
+        You must specify the PullString project ID and a Request
         object that specifies your valid API key.
         """
         import json
 
-        # project name should be tokenized as all lower case with underscores
-        project_name = project_name.lower().replace(" ", "_")
+        # get the project ID into a canonical form
+        project_id = project_id.lower().strip()
 
         # setup the parameters to start a new conversation
         body = {}
-        body['project'] = project_name
+        body['project'] = project_id
         if request and request.time_zone_offset >= 0:
             body['time_zone_offset'] = request.time_zone_offset
 
@@ -314,7 +281,7 @@ class Conversation(object):
         endpoint = self.__get_endpoint(add_id=True)
         return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
 
-    def send_event(self, event, parameters=[], request=None):
+    def send_event(self, event, parameters={}, request=None):
         """
         Send a named event to the Web API and return the response.
         """
@@ -322,31 +289,22 @@ class Conversation(object):
 
         ev = {}
         ev['name'] = event
-        ev['parameters'] = []
-
-        for param in parameters:
-            pdict = {}
-            pdict['name'] = param.name
-            pdict['value'] = param.value
-            ev['parameters'].append(pdict)
-
+        ev['parameters'] = parameters
         body = {'event': ev}
         
         endpoint = self.__get_endpoint(add_id=True)
         return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
 
-    def check_for_timed_responses(self, time_delta, request=None):
+    def check_for_timed_responses(self, request=None):
         """
-        Specify that a given number of seconds have elapsed since the last
-        response was received and check if a time-based response is available.
+        Call the Web API to see if there is a time-based response to process.
+        You only need to call this if the previous response returned a value
+        for timed_response_interval >= 0. In which case, you should set a timer
+        for that number of seconds and then call this function.
         This function will return None if there is no time-based response.
         """
         # nothing to do if no previous response, or it had no time based interval
         if not self.__last_response or self.__last_response.timed_response_interval < 0:
-            return None
-
-        # nothing to do if the time-based interval has not been hit yet
-        if time_delta < self.__last_response.timed_response_interval:
             return None
 
         # send an empty body to trigger the Web API checking for a timed response
@@ -368,18 +326,10 @@ class Conversation(object):
         """
         import json
 
-        values = { 'labels': [], 'counters': [], 'flags': [] }
+        names = []
         for entity in entities:
-            name = entity.name
-
-            if entity.type == ENTITY_LABEL:
-                values['labels'].append(name)
-            elif entity.type == ENTITY_COUNTER:
-                values['counters'].append(name)
-            elif entity.type == ENTITY_FLAG:
-                values['flags'].append(name)
-
-        body = { 'get_variables': values }
+            names.append(entity.name)
+        body = { 'get_entities': names }
         
         endpoint = self.__get_endpoint(add_id=True)
         return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
@@ -390,20 +340,10 @@ class Conversation(object):
         """
         import json
 
-        values = { 'labels': [], 'counters': [], 'flags': [] }
+        values = {}
         for entity in entities:
-            edict = {}
-            edict['name'] = entity.name
-            edict['value'] = entity.value
-
-            if entity.type == ENTITY_LABEL:
-                values['labels'].append(edict)
-            elif entity.type == ENTITY_LABEL:
-                values['counters'].append(edict)
-            elif entity.type == ENTITY_LABEL:
-                values['flags'].append(edict)
-
-        body = { 'set_variables': values }
+            values[entity.name] = entity.value
+        body = { 'set_entities': values }
         
         endpoint = self.__get_endpoint(add_id=True)
         return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
@@ -423,18 +363,13 @@ class Conversation(object):
         if bytes is None:
             return None
 
-        # *TODO: need to remove this hardcoding of an account ID
-        query_params = {
-            "account": "c4369051-b026-4f53-bf5f-faae33c4d731",
-        }
-
         headers = VersionInfo().api_base_headers
         headers["Content-Type"] = "audio/l16; rate=16000"
         headers["Accept"] = "application/json"
         headers["Transfer-Encoding"] = "chunked"
 
         endpoint = self.__get_endpoint(add_id=True)
-        return self.__send_request(endpoint=endpoint, query_params=query_params, body=bytes, headers=headers, request=request)
+        return self.__send_request(endpoint=endpoint, body=bytes, headers=headers, request=request)
 
     def start_audio(self, request=None):
         """
@@ -562,8 +497,7 @@ class Conversation(object):
             headers["Content-Type"] = "application/json"
             headers["Accept"] = "application/json"
 
-        # fill in the query parameters
-        query_params['key'] = request.api_key
+        headers['Authorization'] = "Bearer " + request.api_key
 
         if request.build_type == BUILD_SANDBOX:
             query_params['build_type'] = 'sandbox'
@@ -571,15 +505,12 @@ class Conversation(object):
             query_params['build_type'] = 'staging'
 
         if request.language:
-            query_params['asr_language'] = request.language
+            query_params['language'] = request.language
         else:
-            query_params['asr_language'] = "en-US"
+            query_params['language'] = "en-US"
 
         if request.locale:
             query_params['locale'] = request.locale
-
-        if request.account_id:
-            query_params['account'] = request.account_id
 
         # do the HTTPS POST call with all the query params, header, and body content
         url = posixpath.join(VersionInfo().api_base_url, endpoint)
@@ -609,16 +540,13 @@ class Conversation(object):
         response.asr_hypothesis = data.get('asr_hypothesis', '')
 
         # parse out the outputs array, i.e., dialog or behavior responses
-        for output_data in data.get('dialog_infos', []):
-            type = output_data.get('type', '').lower().strip()
-            if type == OUTPUT_DIALOG:
+        for output_data in data.get('outputs', []):
+            output_type = output_data.get('type', '').lower().strip()
+            if output_type == OUTPUT_DIALOG:
                 output = DialogOutput()
                 output.id = output_data.get('id', '')
                 output.text = output_data.get('text', '')
-                output.uri_low = output_data.get('uri_low', '')
-                output.uri_medium = output_data.get('uri_medium', '')
-                output.uri_high = output_data.get('uri_high', '')
-                output.uri_16k_wav = output_data.get('uri_16k_wav', '')
+                output.uri = output_data.get('uri', '')
                 output.duration = output_data.get('duration', 0)
                 output.character = output_data.get('character', '')
                 output.user_data = output_data.get('user_data', '')
@@ -630,16 +558,10 @@ class Conversation(object):
                     if phoneme.name:
                         output.phonemes.append(phoneme)
 
-            elif type == OUTPUT_BEHAVIOR:
+            elif output_type == OUTPUT_BEHAVIOR:
                 output = BehaviorOutput()
                 output.behavior = output_data.get('behavior', '')
-
-                for param_data in output_data.get('parameters', []):
-                    param = Parameter()
-                    param.name = param_data.get('name', '')
-                    param.value = param_data.get('value', '')
-                    if param.name:
-                        output.parameters.append(param)
+                output.parameters = output_data.get('parameters', {})
 
             else:
                 output = None
@@ -647,26 +569,26 @@ class Conversation(object):
             if output:
                 response.outputs.append(output)
 
+        # handle Python2 vs Python3 string types
+        try:
+            string_types = [str, unicode]  # Python2
+        except Exception as e:
+            string_types = [str]           # Python3
+
         # parse all of the entity information (counters, flags, labels)
-        entities = data.get('variables', {})
-        for counter_data in entities.get('counters', []):
-            name = counter_data.get('name', "")
-            value = counter_data.get('value', 0)
-            if name:
+        entities = data.get('entities', {})
+        for name in entities.keys():
+            value = entities[name]
+
+            if type(value) in [int, float]:
                 counter = CounterEntity(name, value)
                 response.entities.append(counter)
 
-        for counter_data in entities.get('flags', []):
-            name = counter_data.get('name', "")
-            value = counter_data.get('value', False)
-            if name:
+            elif type(value) in [bool]:
                 flag = FlagEntity(name, value)
                 response.entities.append(flag)
 
-        for counter_data in entities.get('labels', []):
-            name = counter_data.get('name', "")
-            value = counter_data.get('value', "")
-            if name:
+            elif type(value) in string_types:
                 label = LabelEntity(name, value)
                 response.entities.append(label)
 
@@ -733,7 +655,16 @@ class Conversation(object):
         # try to parse the server result as a JSON response
         try:
             import json
-            return json.loads(content.decode("utf-8")), status
+            content = json.loads(content.decode("utf-8"))
+
+            # parse out errors reported back in the JSON
+            error = content.get('error')
+            if error:
+                status.error_message = error.get('message', status.error_message)
+                status.status_code = error.get('status', status.status_code)
+                content = {}
+
+            return content, status
         except Exception as e:
             self.__error("Failed to parse JSON response: %s" % content)
             status.error_message = content.strip()
