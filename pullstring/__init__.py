@@ -148,7 +148,7 @@ class Response(object):
         self.conversation_endpoint = ""
         self.last_modified = ""
         self.conversation_id = ""
-        self.state_id = ""
+        self.participant_id = ""
         self.timed_response_interval = -1
         self.asr_hypothesis = ""
 
@@ -156,9 +156,9 @@ class Request(object):
     """
     Describe the parameters for a request to the PullString Web API.
     """
-    def __init__(self, api_key="", state_id=""):
+    def __init__(self, api_key="", participant_id=""):
         self.api_key = api_key
-        self.state_id = state_id
+        self.participant_id = participant_id
         self.build_type = BUILD_PRODUCTION
         self.time_zone_offset = 0
         self.conversation_id = ""
@@ -252,8 +252,8 @@ class Conversation(object):
             body['time_zone_offset'] = request.time_zone_offset
 
         query_params = {}
-        if request and request.state_id:
-            query_params['state'] = request.state_id
+        if request and request.participant_id:
+            query_params['participant'] = request.participant_id
 
         # calling start clears out any previous request/response state
         self.__last_request = None
@@ -402,11 +402,11 @@ class Conversation(object):
         """
         return self.__last_response.conversation_id if self.__last_response else ""
 
-    def get_state_id(self):
+    def get_participant_id(self):
         """
-        Return the current state ID for clients to persist across sessions if desired.
+        Return the current participant ID for clients to persist across sessions if desired.
         """
-        return self.__last_response.state_id if self.__last_response else ""
+        return self.__last_response.participant_id if self.__last_response else ""
 
     def __get_endpoint(self, add_id=False):
         """
@@ -534,7 +534,7 @@ class Conversation(object):
 
         # parse the simple top-level fields from the response
         response.conversation_id = data.get('conversation', '')
-        response.state_id = data.get('state', '')
+        response.participant_id = data.get('participant', '')
         response.timed_response_interval = data.get('timed_response_interval', -1)
         response.last_modified = data.get('last_modified', '')
         response.asr_hypothesis = data.get('asr_hypothesis', '')

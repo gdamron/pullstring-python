@@ -86,12 +86,12 @@ class TestClass(unittest.TestCase):
         response = conv.send_event('restart_game')
         self.assert_contains(response, "Do you want to play")
 
-        # start a new conversation but carry over the state from above
-        state_id = conv.get_state_id()
-        response = conv.start(PROJECT, pullstring.Request(api_key=API_KEY, state_id=state_id))
+        # start a new conversation but carry over the participant from above
+        participant_id = conv.get_participant_id()
+        response = conv.start(PROJECT, pullstring.Request(api_key=API_KEY, participant_id=participant_id))
         self.assert_contains(response, "Do you want to play")
 
-        # because we preserved state, the Name should be the same as above
+        # because we preserved the participant state, the Name should be the same as above
         response = conv.get_entities([pullstring.LabelEntity("NAME")])
         self.assertEqual(len(response.entities), 1)
         self.assertEqual(response.entities[0].value, "Jack")
