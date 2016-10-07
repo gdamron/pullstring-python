@@ -58,7 +58,7 @@ class TestClass(unittest.TestCase):
         self.assert_contains(response, "a game of chance")
 
         # query the current value of the Player Score counter (it's 4 at the start)
-        response = conv.get_entities([pullstring.CounterEntity("Player Score")])
+        response = conv.get_entities([pullstring.Counter("Player Score")])
         self.assertEqual(len(response.entities), 1)
         self.assertEqual(response.entities[0].name, 'Player Score')
         self.assertEqual(response.entities[0].value, 4)
@@ -77,8 +77,8 @@ class TestClass(unittest.TestCase):
             self.fail("Game did not finish after %d iterations" % len(choices))
 
         # set the Name label and confirm that we can get back the new value
-        conv.set_entities([pullstring.LabelEntity("NAME", "Jack")])
-        response = conv.get_entities([pullstring.LabelEntity("NAME")])
+        conv.set_entities([pullstring.Label("NAME", "Jack")])
+        response = conv.get_entities([pullstring.Label("NAME")])
         self.assertEqual(len(response.entities), 1)
         self.assertEqual(response.entities[0].value, "Jack")
 
@@ -92,7 +92,7 @@ class TestClass(unittest.TestCase):
         self.assert_contains(response, "Do you want to play")
 
         # because we preserved the participant state, the Name should be the same as above
-        response = conv.get_entities([pullstring.LabelEntity("NAME")])
+        response = conv.get_entities([pullstring.Label("NAME")])
         self.assertEqual(len(response.entities), 1)
         self.assertEqual(response.entities[0].value, "Jack")
 

@@ -59,7 +59,7 @@ class Entity(object):
         self.name = name
         self.type = type
         
-class LabelEntity(Entity):
+class Label(Entity):
     """
     Subclass of Entity to describe a single Label.
     """
@@ -67,7 +67,7 @@ class LabelEntity(Entity):
         Entity.__init__(self, name, ENTITY_LABEL)
         self.value = value
 
-class CounterEntity(Entity):
+class Counter(Entity):
     """
     Subclass of Entity to describe a single Counter.
     """
@@ -75,7 +75,7 @@ class CounterEntity(Entity):
         Entity.__init__(self, name, ENTITY_COUNTER)
         self.value = value
 
-class FlagEntity(Entity):
+class Flag(Entity):
     """
     Subclass of Entity to describe a single Flag.
     """
@@ -581,15 +581,15 @@ class Conversation(object):
             value = entities[name]
 
             if type(value) in [int, float]:
-                counter = CounterEntity(name, value)
+                counter = Counter(name, value)
                 response.entities.append(counter)
 
             elif type(value) in [bool]:
-                flag = FlagEntity(name, value)
+                flag = Flag(name, value)
                 response.entities.append(flag)
 
             elif type(value) in string_types:
-                label = LabelEntity(name, value)
+                label = Label(name, value)
                 response.entities.append(label)
 
         return response
