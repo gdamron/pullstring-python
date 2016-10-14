@@ -159,6 +159,7 @@ class Request(object):
     def __init__(self, api_key="", participant_id=""):
         self.api_key = api_key
         self.participant_id = participant_id
+        self.restart_if_modified = True
         self.build_type = BUILD_PRODUCTION
         self.time_zone_offset = 0
         self.conversation_id = ""
@@ -250,10 +251,12 @@ class Conversation(object):
         body['project'] = project_id
         if request and request.time_zone_offset >= 0:
             body['time_zone_offset'] = request.time_zone_offset
-
-        query_params = {}
         if request and request.participant_id:
-            query_params['participant'] = request.participant_id
+            body['participant'] = request.participant_id
+        if request and request.build_type == BUILD_SANDBOX:
+            body['build_type'] = 'sandbox'
+        if request and request.build_type == BUILD_STAGING:
+            body['build_type'] = 'staging'
 
         # calling start clears out any previous request/response state
         self.__last_request = None
@@ -261,7 +264,7 @@ class Conversation(object):
 
         # send the request to the Web API
         endpoint = self.__get_endpoint(add_id=False)
-        return self.__send_request(endpoint=endpoint, query_params=query_params, body=json.dumps(body), request=request)
+        return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
 
     def send_text(self, text, request=None):
         """
@@ -499,10 +502,8 @@ class Conversation(object):
 
         headers['Authorization'] = "Bearer " + request.api_key
 
-        if request.build_type == BUILD_SANDBOX:
-            query_params['build_type'] = 'sandbox'
-        elif request.build_type == BUILD_STAGING:
-            query_params['build_type'] = 'staging'
+        if not request.restart_if_modified:
+            query_params['restart_if_modified'] = "false"
 
         if request.language:
             query_params['language'] = request.language
