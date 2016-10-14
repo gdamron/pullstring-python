@@ -147,6 +147,7 @@ class Response(object):
         self.status = Status()
         self.conversation_endpoint = ""
         self.last_modified = ""
+        self.etag = ""
         self.conversation_id = ""
         self.participant_id = ""
         self.timed_response_interval = -1
@@ -538,6 +539,7 @@ class Conversation(object):
         response.participant_id = data.get('participant', '')
         response.timed_response_interval = data.get('timed_response_interval', -1)
         response.last_modified = data.get('last_modified', '')
+        response.etag = data.get('etag', '')
         response.asr_hypothesis = data.get('asr_hypothesis', '')
 
         # parse out the outputs array, i.e., dialog or behavior responses
