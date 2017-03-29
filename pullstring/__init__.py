@@ -39,6 +39,11 @@ BUILD_SANDBOX            = "sandbox"
 BUILD_STAGING            = "staging"
 BUILD_PRODUCTION         = "production"
 
+# The Action to take for a conversation when new content is published
+IF_MODIFIED_RESTART      = "restart"
+IF_MODIFIED_UPDATE       = "update"
+IF_MODIFIED_NOTHING      = "nothing"
+
 # Define the various feature sets that this SDK can support
 FEATURE_STREAMING_ASR    = "streaming-asr"
 
@@ -160,12 +165,13 @@ class Request(object):
     def __init__(self, api_key="", participant_id=""):
         self.api_key = api_key
         self.participant_id = participant_id
-        self.restart_if_modified = True
         self.build_type = BUILD_PRODUCTION
         self.time_zone_offset = 0
         self.conversation_id = ""
         self.language = ""
         self.locale = ""
+        self.if_modified = IF_MODIFIED_NOTHING
+        self.restart_if_modified = True
 
 class VersionInfo(object):
     """
@@ -503,8 +509,12 @@ class Conversation(object):
 
         headers['Authorization'] = "Bearer " + request.api_key
 
+        # only set restart_if_modified or if_modified if value is not default
+        # the legacy behavior of restart_if_modified takes precedence
         if not request.restart_if_modified:
             query_params['restart_if_modified'] = "false"
+        elif request.if_modified is not IF_MODIFIED_NOTHING:
+            query_params['if_modified'] = request.if_modified
 
         if request.language:
             query_params['language'] = request.language
