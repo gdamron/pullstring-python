@@ -282,6 +282,21 @@ class Conversation(object):
         endpoint = self.__get_endpoint(add_id=True)
         return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
 
+    def send_intent(self, intent, entities=None, request=None):
+        """
+        Send an intent as user input to the Web API and return the response.
+        """
+        import json
+        body = { "intent" : intent}
+        if entities is not None:
+            values = {}
+            for entity in entities:
+                values[entity.name] = entity.value
+            body["set_entities"] = values
+
+        endpoint = self.__get_endpoint(add_id=True)
+        return self.__send_request(endpoint=endpoint, body=json.dumps(body), request=request)
+
     def send_activity(self, activity, request=None):
         """
         Send an activity name or ID to the Web API and return the response.

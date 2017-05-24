@@ -17,6 +17,8 @@ import pullstring
 # API Key and Project ID for the example PullString Web API content
 API_KEY = "9fd2a189-3d57-4c02-8a55-5f0159bff2cf"
 PROJECT = "e50b56df-95b7-4fa1-9061-83a7a9bea372"
+INTENT_API_KEY = "36890c35-8ecd-4ac4-9538-6c75eb1ea6f6"
+INTENT_PROJECT = "176a87fb-4d3c-fde5-4b3c-54f18c2d99a4"
 
 class TestClass(unittest.TestCase):
     """
@@ -33,6 +35,21 @@ class TestClass(unittest.TestCase):
         self.assertNotEqual(response, None)
         all_lines = [x.text.lower() for x in response.outputs if x.type == pullstring.OUTPUT_DIALOG]
         self.assertIn(text.lower(), " ".join(all_lines))
+
+    def test_intents(self):
+        """
+        Start the default activity and send an inent with its corresponding label
+        """
+
+        # start a new conversation
+        conv = pullstring.Conversation()
+        response = conv.start(INTENT_PROJECT, pullstring.Request(api_key=INTENT_API_KEY))
+        self.assert_contains(response, "Welcome to the LUIS test. What do you like?")
+
+        # we like green
+        entities = [pullstring.Label("Luis Color", "Green")]
+        response = conv.send_intent(intent="Favorite Color", entities=entities)
+        self.assert_contains(response, "Green is a cool color")
 
     def test_rock_paper_scissors(self):
         """
