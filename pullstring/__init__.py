@@ -16,8 +16,8 @@ For more details, see http://pullstring.com/.
 """
 
 # Define the module metadata
-__copyright__            = "Copyright 2016 PullString, Inc."
-__version__              = "1.0.1"
+__copyright__            = "Copyright 2016-2017 PullString, Inc."
+__version__              = "1.0.2"
 __license__              = "MIT"
 __contributors__         = []
 
@@ -216,7 +216,7 @@ class VersionInfo(object):
         Return True if the specified feature is supported by this implementation.
         """
         if feature_name == FEATURE_STREAMING_ASR:
-            return False
+            return True
         return False
 
 class Conversation(object):
@@ -240,6 +240,7 @@ class Conversation(object):
     def __init__(self):
         self.__last_request = None
         self.__last_response = None
+        self.debug_mode = False
 
     def start(self, project_id, request=None):
         """
@@ -383,18 +384,14 @@ class Conversation(object):
         """
         # strip the WAV header if given a WAV file
         if format == FORMAT_WAV_16K:
-            bytes = self.__get_wav_data(bytes)
+            bytes = self.strip_wav_header(bytes)
 
         if bytes is None:
             return None
 
-        headers = VersionInfo().api_base_headers
-        headers["Content-Type"] = "audio/l16; rate=16000"
-        headers["Accept"] = "application/json"
-        headers["Transfer-Encoding"] = "chunked"
-
-        endpoint = self.__get_endpoint(add_id=True)
-        return self.__send_request(endpoint=endpoint, body=bytes, headers=headers, request=request)
+        self.start_audio(request)
+        self.add_audio(bytes)
+        return self.end_audio()
 
     def start_audio(self, request=None):
         """
@@ -403,8 +400,14 @@ class Conversation(object):
         Note, chunked streaming is not currently implemented, so this will
         batch up all audio and send it all at once when end_audio() is called.
         """
-        self.audio_request = request
-        self.audio_bytes = b""
+        headers = VersionInfo().api_base_headers
+        headers["Content-Type"] = "audio/l16; rate=16000"
+        headers["Accept"] = "application/json"
+        headers["Transfer-Encoding"] = "chunked"
+
+        endpoint = self.__get_endpoint(add_id=True)
+
+        self.__http_start(endpoint, {}, headers, request)
 
     def add_audio(self, bytes):
         """
@@ -412,14 +415,14 @@ class Conversation(object):
         format of the audio must be mono 16-bit LinearPCM audio data
         at a sample rate of 16000 samples per second.
         """
-        self.audio_bytes += bytes
+        self.__http_add(bytes)
 
     def end_audio(self):
         """
         Signal that all audio has been provided via add_audio() calls.
         This will complete the audio request and return the Web API response.
         """
-        return self.send_audio(self.audio_bytes, self.audio_request)
+        return self.__http_end()
 
     def get_conversation_id(self):
         """
@@ -442,7 +445,7 @@ class Conversation(object):
             endpoint += '/' + self.__last_response.conversation_id
         return endpoint
 
-    def __get_wav_data(self, bytes):
+    def strip_wav_header(self, bytes):
         """
         Read a WAV header, check it's valid, and return the data section.
         """
@@ -506,52 +509,6 @@ class Conversation(object):
             setattr(r, attribute, new_value if new_value else old_value)
 
         return r
-
-    def __send_request(self, endpoint, query_params={}, body="", headers=None, request=None):
-        """
-        Send a request to PullString's Web API and return a Response object.
-        """
-        import posixpath
-
-        # get all of the request settings for this call
-        request = self.__get_request(request, self.__last_request)
-        
-        # fill in some default values for most requests
-        if headers is None:
-            headers = VersionInfo().api_base_headers
-            headers["Content-Type"] = "application/json"
-            headers["Accept"] = "application/json"
-
-        headers['Authorization'] = "Bearer " + request.api_key
-
-        # only set restart_if_modified or if_modified if value is not default
-        # the legacy behavior of restart_if_modified takes precedence
-        if not request.restart_if_modified:
-            query_params['restart_if_modified'] = "false"
-        elif request.if_modified is not IF_MODIFIED_NOTHING:
-            query_params['if_modified'] = request.if_modified
-
-        if request.language:
-            query_params['language'] = request.language
-        else:
-            query_params['language'] = "en-US"
-
-        if request.locale:
-            query_params['locale'] = request.locale
-
-        # do the HTTPS POST call with all the query params, header, and body content
-        url = posixpath.join(VersionInfo().api_base_url, endpoint)
-        data, status = self.__http_helper(url, query_params=query_params, headers=headers, data=body)
-
-        # convert the JSON response body to our Response object
-        response = self.__json_to_response(data)
-        response.status = status
-
-        # save the last request and response to remember settings
-        self.__last_request = request
-        self.__last_response = response
-
-        return response
 
     def __json_to_response(self, data):
         """
@@ -621,10 +578,22 @@ class Conversation(object):
                 response.entities.append(label)
 
         return response
+
+    def __debug(self, msg):
+        if self.debug_mode:
+            print("DEBUG: %s" % msg)
             
-    def __http_helper(self, url, query_params, headers, data):
+    def __send_request(self, endpoint, query_params={}, body="", headers=None, request=None):
         """
-        Performs an HTTPS request and returns a tuple of (json_dict, status).
+        Send a request to PullString's Web API and return a Response object.
+        """
+        self.__http_start(endpoint, query_params, headers, request)
+        self.__http_add(body)
+        return self.__http_end()
+
+    def __http_start(self, endpoint, query_params, headers, request):
+        """
+        Open an HTTPS request to the Web API
         """
         import sys
         if sys.version_info >= (3, 0):
@@ -639,6 +608,40 @@ class Conversation(object):
             import urlparse
             import urllib
 
+        import posixpath
+
+        # get all of the request settings for this call
+        request = self.__get_request(request, self.__last_request)
+        
+        # fill in some default values for most requests
+        if headers is None:
+            headers = VersionInfo().api_base_headers
+            headers["Content-Type"] = "application/json"
+            headers["Accept"] = "application/json"
+
+        headers['Authorization'] = "Bearer " + request.api_key
+
+        # only set restart_if_modified or if_modified if value is not default
+        # the legacy behavior of restart_if_modified takes precedence
+        if not request.restart_if_modified:
+            query_params['restart_if_modified'] = "false"
+        elif request.if_modified is not IF_MODIFIED_NOTHING:
+            query_params['if_modified'] = request.if_modified
+
+        if request.language:
+            query_params['language'] = request.language
+        else:
+            query_params['language'] = "en-US"
+
+        if request.locale:
+            query_params['locale'] = request.locale
+
+        # save the last request to remember settings
+        self.__last_request = request
+
+        # do the HTTPS POST call with all the query params, header, and body content
+        url = posixpath.join(VersionInfo().api_base_url, endpoint)
+
         # parse out the URL components
         purl = urlparse.urlparse(url)
         path = purl.path
@@ -647,11 +650,6 @@ class Conversation(object):
 
         # open a POST connection to the HTTPS server
         conn = httplib.HTTPSConnection(purl.netloc)
-        
-        if isinstance(data, type(u"")):
-            data = data.encode('utf-8')
-
-        # are we doing chunked encoding of audio data, or just regular POST?
         chunked = (headers.get("Transfer-Encoding", "") == "chunked")
         if chunked:
             # send the data in a chunked encoded format
@@ -660,25 +658,55 @@ class Conversation(object):
                 conn.putheader(key, headers[key])
             conn.endheaders()
 
-            conn.send(b"%x\r\n" % len(data))
-            conn.send(b"%s\r\n" % data)
-            conn.send(b"0\r\n\r\n")
+        self.__debug("POST https://%s%s" % (purl.netloc, path))
+        self.__debug("HEADERS %s" % headers)
 
-        else:
+        # store state for __http_add() and __http_end()
+        self.__chunked = chunked
+        self.__headers = headers
+        self.__conn = conn
+        self.__path = path
+
+    def __http_add(self, data):
+        """
+        Output data to the body of the HTTPS request.
+        """
+        
+        if isinstance(data, type(u"")):
+            data = data.encode('utf-8')
+
+        # are we doing chunked encoding of audio data, or just regular POST?
+        if self.__chunked:
+            # send the data in a chunked encoded format
+            self.__conn.send(b"%x\r\n" % len(data))
+            self.__conn.send(b"%s\r\n" % data)
+
+        elif data:
             # open a standard POST connection to the server
-            conn = httplib.HTTPSConnection(purl.netloc)
-            conn.request("POST", path, data, headers)
+            self.__conn.request("POST", self.__path, data, self.__headers)
 
+    def __http_end(self):
+        """
+        Close the HTTPS connection and parse the JSON response.
+        """
+
+        # make sure we add an final empty chunk for chunked encoding
+        if self.__chunked:
+            self.__http_add("")
+            
         # get the response code and content
-        http_response = conn.getresponse()
+        http_response = self.__conn.getresponse()
         content = http_response.read()
+
+        self.__debug("RESPONSE %s" % http_response.status)
+        self.__debug("CONTENT %s" % content)
 
         # create a Status() object to describe the HTTP success/error
         status = Status(http_response.status)
         if status.status_code >= 300:
             status.error_message = http_response.reason
 
-        conn.close()
+        self.__conn.close()
 
         # try to parse the server result as a JSON response
         try:
@@ -692,8 +720,16 @@ class Conversation(object):
                 status.status_code = error.get('status', status.status_code)
                 content = {}
 
-            return content, status
         except Exception as e:
             self.__error("Failed to parse JSON response: %s" % content)
             status.error_message = content.strip()
-            return {}, status
+            content = {}
+
+        # convert the JSON response body to our Response object
+        response = self.__json_to_response(content)
+        response.status = status
+
+        # save the last response to remember settings
+        self.__last_response = response
+
+        return response

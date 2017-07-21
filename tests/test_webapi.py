@@ -36,6 +36,12 @@ class TestClass(unittest.TestCase):
         all_lines = [x.text.lower() for x in response.outputs if x.type == pullstring.OUTPUT_DIALOG]
         self.assertIn(text.lower(), " ".join(all_lines))
 
+    def read_file(self, filename):
+        # return the binary contents of a file
+        with open(filename, "rb") as f:
+            return f.read()
+
+
     def test_intents(self):
         """
         Start the default activity and send an inent with its corresponding label
@@ -51,7 +57,7 @@ class TestClass(unittest.TestCase):
         response = conv.send_intent(intent="Favorite Color", entities=entities)
         self.assert_contains(response, "Green is a cool color")
 
-    def test_rock_paper_scissors(self):
+    def test_rock_paper_scissors_text(self):
         """
         Start the default activity and parse out a name from the user
         """
@@ -117,6 +123,41 @@ class TestClass(unittest.TestCase):
         response = conv.send_text("quit")
         self.assert_contains(response, "Bye")
 
+    def test_rock_paper_scissors_audio(self):
+        """
+        Start the default activity and parse out a name from the user
+        """
+
+        conv = pullstring.Conversation()
+
+        # read the WAV audio files
+        yes = self.read_file(os.path.join("..", "examples", "yes.wav"))
+        no = self.read_file(os.path.join("..", "examples", "no.wav"))
+        self.assertTrue(len(yes) > 0 and len(no) > 0)
+
+        # strip the WAV headers to get the raw audio bytes
+        yes = conv.strip_wav_header(yes)
+        no = conv.strip_wav_header(no)
+
+        # start a new conversation
+        response = conv.start(PROJECT, pullstring.Request(api_key=API_KEY))
+        self.assert_contains(response, "Do you want to play")
+        
+        # try sending an entire "no" audio file at once
+        response = conv.send_audio(no)
+        self.assert_contains(response, "was that a yes")
+
+        # and then try streaming incremental 4K chunks of the "yes" audio
+        chunk_size = 4096
+        conv.start_audio()
+        while len(yes) > 0:
+            buffer = yes[:chunk_size]
+            yes = yes[chunk_size:]
+            # stream the next chunk of audio to the server
+            conv.add_audio(buffer)
+
+        response = conv.end_audio()
+        self.assert_contains(response, "great!")
 
 if __name__ == '__main__':
     print("Running test...")
