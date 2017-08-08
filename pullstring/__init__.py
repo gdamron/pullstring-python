@@ -649,7 +649,14 @@ class Conversation(object):
             path += "?" + urllib.urlencode(query_params)
 
         # open a POST connection to the HTTPS server
-        conn = httplib.HTTPSConnection(purl.netloc)
+        # disable TLS cert checking if pointing to a local server (PullString internal only)
+        if sys.version_info >= (2, 7, 9) and purl.hostname == "localhost":
+            import ssl
+            conn = httplib.HTTPSConnection(purl.netloc, context=ssl._create_unverified_context())
+        else:
+            conn = httplib.HTTPSConnection(purl.netloc)
+
+        # support chunked encoding for streaming audio to the server
         chunked = (headers.get("Transfer-Encoding", "") == "chunked")
         if chunked:
             # send the data in a chunked encoded format
@@ -682,6 +689,7 @@ class Conversation(object):
             self.__conn.send(b"%s\r\n" % data)
 
         elif data:
+            self.__debug("BODY %s" % data)
             # open a standard POST connection to the server
             self.__conn.request("POST", self.__path, data, self.__headers)
 

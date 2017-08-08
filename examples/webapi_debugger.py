@@ -12,6 +12,7 @@ import re
 import os
 import sys
 import time
+import argparse
 sys.path.insert(0, os.path.abspath('..'))
 import pullstring
 
@@ -22,13 +23,16 @@ class Debugger(object):
     commands to access the main Web API calls (/help for details).
     """
 
-    def __init__(self, api_key, project_id, build_type=pullstring.BUILD_PRODUCTION):
+    def __init__(self, api_key, project_id, build_type, base_url):
         self.ps = pullstring.Conversation()
         self.ps.debug_mode = True
         self.build_type = build_type
         self.api_key = api_key
         self.project_id = project_id
         self.last_response_time = self.get_current_time()
+        if base_url:
+            print("Setting Web API base URL to: %s" % base_url)
+            pullstring.VersionInfo().api_base_url = base_url
 
     def get_current_time(self):
         # return the current time in (floating point) seconds
@@ -72,8 +76,19 @@ class Debugger(object):
             # send an event to the Web API, plus optional parameters
             event_name = args[0]
             params = {}
-            for arg in args[1:]:
-                key, value = arg.split("=")
+
+            # support space or semicolon separating of event params
+            event_args = args[1:]
+            if len(event_args) == 1 and ";" in event_args[0]:
+                event_args = event_args[0].split(";")
+            
+            for arg in event_args:
+                try:
+                    key, value = arg.split("=")
+                except Exception as e:
+                    print("ERROR: cannot parse /event command line: %s" % e)
+                    return True
+                
                 key = key.strip()
                 value = value.strip()
 
@@ -158,28 +173,34 @@ class Debugger(object):
                 if not self.debugger_command(user_input):
                     # other send the user input to the conversation
                     response = self.ps.send_text(user_input)
+                else:
+                    response = None
             else:
                 # if no input text, then check for a timed response
                 response = self.ps.check_for_timed_responses()
 
 if __name__ == "__main__":
     # parse the command line arguments
-    if len(sys.argv) < 3:
-        sys.exit("Usage: webapi_debugger.py <api-key> <project-id> [--staging|--sandbox]")
+    parser = argparse.ArgumentParser(description="PullString Web API command line debugger")
+    parser.add_argument("api_key", help="The API key for the PullString Account")
+    parser.add_argument("project_id", help="The Project ID for the content to access")
+    parser.add_argument("--build_type", help="Use staging, sandbox, or production content",
+                        dest="build_type", default="production")
+    parser.add_argument("--base_url", help="Change the base URL for the PullString Web API",
+                        dest="base_url", default="")
 
-    api_key = sys.argv[1]
-    project_id = sys.argv[2]
-    if len(api_key) != 36 or len(project_id) != 36:
+    
+    args = parser.parse_args()
+    if len(args.api_key) != 36 or len(args.project_id) != 36:
         sys.exit("ERROR: keys are 36-character long GUIDs")
 
-    build_type = pullstring.BUILD_PRODUCTION
-    if "--staging" in sys.argv:
-        build_type = pullstring.BUILD_STAGING
-    elif "--sandbox" in sys.argv:
-        build_type = pullstring.BUILD_SANDBOX
+    if args.build_type not in [pullstring.BUILD_PRODUCTION,
+                               pullstring.BUILD_STAGING,
+                               pullstring.BUILD_SANDBOX]:
+        sys.exit("ERROR: unsupported build type: %s" % args.build_type)
         
     # enter the main debugger loop
     try:
-        Debugger(api_key, project_id, build_type).run()
+        Debugger(args.api_key, args.project_id, args.build_type, args.base_url).run()
     except KeyboardInterrupt:
         sys.exit("Aborting...")
